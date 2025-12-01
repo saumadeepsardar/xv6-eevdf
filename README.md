@@ -31,16 +31,16 @@ The implementation spans both kernel-space logic and user-space APIs. Below is a
 
 | File | Modification Description |
 | :--- | :--- |
-| **`user/user.h`** | [cite\_start]Added function prototypes for user-level API calls: `setweight`, `getpinfo`, and `setschedtrace`. |
-| **`user/eevdf_test1.c`** | [cite\_start]**Test 1:** CPU Load Test (Heavy compute without yielding)[cite: 266]. |
-| **`user/eevdf_test2.c`** | [cite\_start]**Test 2:** Mixed CPU + Sleep Test (Validating behavior with voluntary yields). |
-| **`user/eevdf_test3.c`** | [cite\_start]**Test 3:** Sleep/Wakeup Fairness Test (Simulating I/O bound behavior). |
+| **`user/user.h`** | Added function prototypes for user-level API calls: `setweight`, `getpinfo`, and `setschedtrace`. |
+| **`user/eevdf_test1.c`** | **Test 1:** CPU Load Test (Heavy compute without yielding). |
+| **`user/eevdf_test2.c`** | **Test 2:** Mixed CPU + Sleep Test (Validating behavior with voluntary yields). |
+| **`user/eevdf_test3.c`** | **Test 3:** Sleep/Wakeup Fairness Test (Simulating I/O bound behavior). |
 
 ## 🛠️ System Calls
 
 The following system calls were introduced to interact with the scheduler:
 
-1.  **`setweight(int weight)`**: Sets the proportional weight of the current process. [cite\_start]Higher weight = more CPU time.
+1.  **`setweight(int weight)`**: Sets the proportional weight of the current process. Higher weight = more CPU time.
 2.  **`setschedtrace(int enable)`**: Enables real-time logging of scheduling events to the console for debugging.
 3.  **`getpinfo(struct pinfo *info)`**: Retrieves internal scheduler state (runtime, deadline, sched\_count) for the current process.
 
@@ -108,3 +108,4 @@ To enable verbose scheduling traces manually inside any program, the code uses `
   * **Saumadeep Sardar** (Roll No.: CS23B1049) 
   * **Dhage Pratik Bhishmacharya** (Roll No.: CS23B1047) 
   * **Nisarg Ranade** (Roll No.: CS23B1090) 
+
