@@ -91,3 +91,30 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_setweight(void)
+{
+  int w;
+  argint(0, &w);
+  setweight(w);
+  return 0;
+}
+
+uint64
+sys_getpinfo(void)
+{
+  uint64 addr;
+  struct pinfo info;
+  argaddr(0, &addr);
+  getpinfo(&info);
+  return copyout(myproc()->pagetable, addr, (char*)&info, sizeof(info));
+}
+
+uint64 sys_setschedtrace(void)
+{
+  int enable;
+  argint(0, &enable);
+  sched_trace = enable;
+  return 0;
+}

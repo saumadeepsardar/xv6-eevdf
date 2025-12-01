@@ -6,11 +6,22 @@
 #include "proc.h"
 #include "defs.h"
 
+// --- EEVDF global fields ---
+#define FIXED_SHIFT 12
+#define TO_FIXED(x) ((x) << FIXED_SHIFT)
+#define FROM_FIXED(x) ((x) >> FIXED_SHIFT)
+
+#define S_FIXED TO_FIXED(1)   // service quantum (can tune later)
+
+static uint64 global_vtime = 0;   // virtual time in fixed-point
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
 struct proc *initproc;
+
+int sched_trace = 0;
 
 int nextpid = 1;
 struct spinlock pid_lock;
@@ -25,6 +36,17 @@ extern char trampoline[]; // trampoline.S
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
+
+// per-CPU lightweight trace event (for debugging only
+struct sched_event {
+  int valid;          // 0 = empty, 1 = filled
+  int cpu;
+  int pid;
+  int weight;
+  uint64 vdeadline;
+};
+static struct sched_event sched_events[NCPU];
+
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -145,6 +167,19 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  // --- EEVDF initialization (default values) ---
+  // weight: default proportional share (1). You can change this via a syscall.
+  p->weight = 1;
+  // ticks run since last accounting (timer interrupt should increment this)
+  p->run_ticks = 0;
+  // virtual runtime: inherit 0 for a freshly allocated proc
+  p->vruntime = 0;
+  // eligible time and deadline: start at the current global virtual time
+  // (global_vtime and S_FIXED are expected to be defined elsewhere)
+  p->eligible_time = global_vtime;
+  p->vdeadline = p->eligible_time + (S_FIXED / (uint64)p->weight);
+  // ------------------------------------------------
 
   return p;
 }
@@ -312,6 +347,19 @@ fork(void)
 
   pid = np->pid;
 
+  // --- inherit or initialize EEVDF-related fields while holding np->lock ---
+  // inherit weight from parent (so child starts with same share)
+  np->weight = p->weight;
+  // child's run_ticks starts at 0
+  np->run_ticks = 0;
+  // inherit parent's virtual runtime to avoid child getting extra advantage
+  np->vruntime = p->vruntime;
+  // child's eligible_time should be at least current global_vtime
+  np->eligible_time = global_vtime;
+  // recompute deadline based on weight
+  np->vdeadline = np->eligible_time + (S_FIXED / (uint64)np->weight);
+  // ------------------------------------------------------------------------
+
   release(&np->lock);
 
   acquire(&wait_lock);
@@ -324,6 +372,7 @@ fork(void)
 
   return pid;
 }
+
 
 // Pass p's abandoned children to init.
 // Caller must hold wait_lock.
@@ -385,6 +434,7 @@ exit(int status)
   panic("zombie exit");
 }
 
+
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
 int
@@ -444,39 +494,102 @@ wait(uint64 addr)
 void
 scheduler(void)
 {
-  struct proc *p;
   struct cpu *c = mycpu();
-
   c->proc = 0;
+
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting.
-    intr_on();
+    intr_on();  // enable interrupts to prevent deadlock
 
-    int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
-      }
-      release(&p->lock);
+    // ---- Print any deferred event for this CPU (outside locks)
+    int cid = cpuid();
+    if (sched_events[cid].valid) {
+      struct sched_event e = sched_events[cid];
+      sched_events[cid].valid = 0;
+      printf("[EEVDF] CPU=%d pid=%d weight=%d vdeadline=%llu\n",
+             e.cpu, e.pid, e.weight, (unsigned long long)e.vdeadline);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
+
+    struct proc *p = 0;
+    uint64 best_deadline = (uint64)-1;
+
+    // Step 1: find the runnable process with the smallest eligible vdeadline
+    for(struct proc *q = proc; q < &proc[NPROC]; q++) {
+      acquire(&q->lock);
+      if(q->state == RUNNABLE) {
+        if(q->eligible_time <= global_vtime && q->vdeadline < best_deadline) {
+          if(p) release(&p->lock); // release previous candidate's lock
+          p = q;                   // p now holds q->lock
+          best_deadline = q->vdeadline;
+        } else {
+          release(&q->lock);
+        }
+      } else {
+        release(&q->lock);
+      }
+    }
+
+    if(p == 0) {
+      // No process is runnable — wait for interrupt
       intr_on();
       asm volatile("wfi");
+      continue;
     }
+
+    // At this point `p` is selected and its lock is held.
+
+    // Step 2: run the chosen process (we hold p->lock)
+    p->state = RUNNING;
+    c->proc = p;
+
+    // record ticks before running
+    int before_ticks = p->run_ticks;
+
+    // context switch to process (p->lock stays held across swtch in xv6 convention)
+    swtch(&c->context, &p->context);
+
+    // Returned here after the process yielded or was preempted.
+    c->proc = 0;
+
+    // Still holding p->lock here (as in xv6 convention).
+    // Step 3: process has yielded or been preempted, update EEVDF & stats
+
+    // compute how many real ticks it ran
+    int ran_ticks = p->run_ticks - before_ticks;
+    if (ran_ticks < 0) ran_ticks = 0;
+
+    // Convert to fixed-point delta time and update vruntime
+    uint64 delta_v = ((uint64)ran_ticks << FIXED_SHIFT) / (p->weight > 0 ? p->weight : 1);
+    p->vruntime += delta_v;
+
+    // Update global virtual time if needed (simple policy)
+    if(p->vruntime > global_vtime)
+      global_vtime = p->vruntime;
+
+    // Update eligibility and new deadline
+    p->eligible_time = p->vruntime;
+    p->vdeadline = p->eligible_time + (S_FIXED / (uint64)(p->weight > 0 ? p->weight : 1));
+
+    // Update runtime/sched counters (use ticks and last_scheduled if you set them)
+    // If last_scheduled is used, ensure it was set when the process actually started
+    // Here we update simple runtime and sched_count (you can refine as needed)
+    p->sched_count++;
+    // You may track runtime differently; if you set last_scheduled before running, use that.
+    // For simplicity, increment runtime by ran_ticks:
+    p->runtime += ran_ticks;
+
+    // Record a deferred trace event (still while holding p->lock is fine because we only write CPU-local slot)
+    if (sched_trace) {
+      int cid2 = cpuid();
+      sched_events[cid2].cpu = cid2;
+      sched_events[cid2].pid = p->pid;
+      sched_events[cid2].weight = p->weight;
+      sched_events[cid2].vdeadline = p->vdeadline;
+      // publish last
+      sched_events[cid2].valid = 1;
+    }
+
+    // Step 4: release p->lock and continue scheduling loop
+    release(&p->lock);
   }
 }
 
@@ -584,12 +697,23 @@ wakeup(void *chan)
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
+        // make runnable
         p->state = RUNNABLE;
+
+        // Prevent the "sleep long -> jump to front" problem:
+        // ensure eligible_time is at least the current global virtual time.
+        if (p->eligible_time < global_vtime) {
+          p->eligible_time = global_vtime;
+        }
+        // Recompute the deadline based on (possibly updated) eligible_time.
+        // Ensure weight > 0 (weight should be >0 by initialization / syscall).
+        p->vdeadline = p->eligible_time + (S_FIXED / (uint64)p->weight);
       }
       release(&p->lock);
     }
   }
 }
+
 
 // Kill the process with the given pid.
 // The victim won't exit until it tries to return
@@ -692,4 +816,28 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+void setweight(int w) {
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  if(w > 0) p->weight = w;
+  release(&p->lock);
+}
+
+int
+getpinfo(struct pinfo *info)
+{
+  struct proc *p = myproc();
+  if (!info)
+    return -1;
+  acquire(&p->lock);
+  info->pid = p->pid;
+  info->state = p->state;
+  info->weight = p->weight;
+  info->runtime = p->runtime;
+  info->sched_count = p->sched_count;
+  info->vdeadline = p->vdeadline;
+  release(&p->lock);
+  return 0;
 }

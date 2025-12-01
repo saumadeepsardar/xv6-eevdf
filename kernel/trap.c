@@ -66,7 +66,7 @@ usertrap(void)
 
     syscall();
   } else if((which_dev = devintr()) != 0){
-    // ok
+    // device interrupt handled
   } else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
@@ -77,11 +77,19 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
+    // count the tick for the running process so scheduler can account for real time run
+    if(p) {
+      // no lock here — updating an integer tick counter in interrupt context is OK;
+      // scheduler reads run_ticks while holding p->lock, so races are bounded.
+      p->run_ticks++;
+    }
     yield();
+  }
 
   usertrapret();
 }
+
 
 //
 // return to user space

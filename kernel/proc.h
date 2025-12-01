@@ -104,4 +104,28 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  
+  uint64 eligible_time;   // fixed-point virtual time when process became eligible
+  uint64 vdeadline;       // fixed-point virtual deadline
+  uint64 vruntime;        // optional: virtual runtime
+  int weight;               // >0, default 1
+  int run_ticks;            // counts real ticks this process ran since last update
+  
+  uint64 runtime;      // Total CPU time used (ticks)
+  uint64 sched_count;  // Times scheduled
+  uint64 sleep_time;   // Time spent sleeping
+  uint64 wait_time;    // Time waiting in RUNNABLE state
+  uint64 last_scheduled; // For measuring waiting time
 };
+
+struct pinfo {
+  int pid;
+  int state;
+  int weight;
+  uint64 runtime;
+  uint64 sched_count;
+  uint64 vdeadline;
+};
+int getpinfo(struct pinfo *info);
+
+extern int sched_trace;

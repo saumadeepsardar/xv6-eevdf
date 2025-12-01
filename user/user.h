@@ -22,6 +22,11 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int setweight(int);
+struct pinfo { int pid, state, weight; uint64 runtime, sched_count, vdeadline; };
+int getpinfo(struct pinfo*);
+void setschedtrace(int);
+
 
 // ulib.c
 int stat(const char*, struct stat*);

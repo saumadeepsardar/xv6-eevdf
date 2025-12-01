@@ -1,0 +1,91 @@
+# ===========================
+# XV6-RISCV BUILD FILES
+# ===========================
+
+# Kernel and boot binaries
+kernel/kernel
+kernel/kernel.asm
+kernel/kernel.sym
+kernel/entry.o
+kernel/*.o
+
+# ELF / binaries
+*.out
+*.elf
+*.img
+*.bin
+
+# QEMU related build output
+fs.img
+xv6.img
+xv6-riscv
+xv6-riscv.img
+xv6-riscv.iso
+xv6-riscv.elf
+
+# Compiled object files
+*.o
+*.d
+
+# Assembly listing and map files
+*.lst
+*.map
+*.dis
+
+# Generated dependency files
+*.d
+
+# Auto-generated syscall tables or headers
+kernel/syscall.h.tmp
+kernel/syscall.c.tmp
+
+# User-space build outputs
+_user/
+user/*.o
+user/*.out
+user/*.asm
+user/*.sym
+
+# ===========================
+# EDITOR / ENVIRONMENT FILES
+# ===========================
+
+# Vim / Emacs / VSCode / JetBrains temp files
+*~
+*.swp
+*.swo
+*.swx
+*.bak
+*.tmp
+.vscode/
+.idea/
+
+# Mac / Windows system files
+.DS_Store
+Thumbs.db
+
+# ===========================
+# LOGS / DEBUG / TEST OUTPUTS
+# ===========================
+*.log
+*.trace
+*.dump
+*.txt
+*.dat
+
+# Scheduler / Debug traces
+sched_trace.txt
+debug_output.txt
+
+# ===========================
+# BUILD SYSTEM OUTPUT
+# ===========================
+obj/
+build/
+out/
+*.a
+
+# QEMU runtime files
+qemu.log
+qemu.pid
+
