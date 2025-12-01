@@ -1,22 +1,19 @@
-Based on the detailed report provided, here is a structured `README.md` file tailored for a GitHub repository.
-
------
 
 # EEVDF Scheduler for XV6
 
-[cite\_start]This repository contains an enhanced version of the MIT XV6 operating system, replacing the default Round-Robin scheduler with an **Earliest Eligible Virtual Deadline First (EEVDF)** scheduler[cite: 1, 18].
+This repository contains an enhanced version of the MIT XV6 operating system, replacing the default Round-Robin scheduler with an **Earliest Eligible Virtual Deadline First (EEVDF)** scheduler.
 
-[cite\_start]This project was developed as an Operating Systems Course Project at the Indian Institute of Information Technology Design and Manufacturing (IIITDM), Kancheepuram[cite: 3, 8, 9].
+This project was developed as an Operating Systems (CS3000) Course Project at the Indian Institute of Information Technology Design and Manufacturing (IIITDM) Kancheepuram, Chennai.
 
 ## 📖 Introduction
 
-[cite\_start]EEVDF is an optimal proportional-share CPU scheduling algorithm, similar to mechanisms used in modern Linux kernels (like CFS)[cite: 25]. Unlike the default XV6 scheduler, which can lead to unfair CPU distribution, this implementation ensures:
+EEVDF is an optimal proportional-share CPU scheduling algorithm, similar to mechanisms used in modern Linux kernels (like CFS). Unlike the default XV6 scheduler, which can lead to unfair CPU distribution, this implementation ensures:
 
-  * [cite\_start]**Proportional Fairness:** Processes receive CPU time proportional to their assigned weights[cite: 27].
-  * [cite\_start]**Starvation Freedom:** The algorithm uses virtual deadlines to ensure every process eventually runs[cite: 35].
-  * [cite\_start]**Low Latency:** Optimized for interactivity and predictable deadline-based selection[cite: 34, 36].
+  * **Proportional Fairness:** Processes receive CPU time proportional to their assigned weights.
+  * **Starvation Freedom:** The algorithm uses virtual deadlines to ensure every process eventually runs.
+  * **Low Latency:** Optimized for interactivity and predictable deadline-based selection.
 
-The scheduler tracks a "Virtual Runtime" ($v_{runtime}$) and a "Virtual Deadline" ($v_{deadline}$) for every process. [cite\_start]The process with the earliest eligible virtual deadline is selected for execution[cite: 63, 68].
+The scheduler tracks a "Virtual Runtime" ($v_{runtime}$) and a "Virtual Deadline" ($v_{deadline}$) for every process. The process with the earliest eligible virtual deadline is selected for execution.
 
 ## ⚙️ Key Modifications
 
@@ -26,26 +23,26 @@ The implementation spans both kernel-space logic and user-space APIs. Below is a
 
 | File | Modification Description |
 | :--- | :--- |
-| **`kernel/proc.h`** | [cite\_start]Added fields to `struct proc` including `vruntime`, `vdeadline`, `weight`, and statistics counters (`sched_count`, `sleep_time`)[cite: 71, 74]. |
-| **`kernel/proc.c`** | Replaced the `scheduler()` loop with EEVDF logic. [cite\_start]Added helper functions `setweight()` and `getpinfo()`[cite: 94, 198, 206]. |
-| **`kernel/sysproc.c`** | [cite\_start]Implemented system calls: `sys_setweight`, `sys_setschedtrace`, and `sys_getpinfo`[cite: 223, 233, 242]. |
+| **`kernel/proc.h`** | Added fields to `struct proc` including `vruntime`, `vdeadline`, `weight`, and statistics counters (`sched_count`, `sleep_time`). |
+| **`kernel/proc.c`** | Replaced the `scheduler()` loop with EEVDF logic. Added helper functions `setweight()` and `getpinfo()`. |
+| **`kernel/sysproc.c`** | Implemented system calls: `sys_setweight`, `sys_setschedtrace`, and `sys_getpinfo`. |
 
 ### User Space
 
 | File | Modification Description |
 | :--- | :--- |
-| **`user/user.h`** | [cite\_start]Added function prototypes for user-level API calls: `setweight`, `getpinfo`, and `setschedtrace`[cite: 259, 260]. |
+| **`user/user.h`** | [cite\_start]Added function prototypes for user-level API calls: `setweight`, `getpinfo`, and `setschedtrace`. |
 | **`user/eevdf_test1.c`** | [cite\_start]**Test 1:** CPU Load Test (Heavy compute without yielding)[cite: 266]. |
-| **`user/eevdf_test2.c`** | [cite\_start]**Test 2:** Mixed CPU + Sleep Test (Validating behavior with voluntary yields)[cite: 358]. |
-| **`user/eevdf_test3.c`** | [cite\_start]**Test 3:** Sleep/Wakeup Fairness Test (Simulating I/O bound behavior)[cite: 503]. |
+| **`user/eevdf_test2.c`** | [cite\_start]**Test 2:** Mixed CPU + Sleep Test (Validating behavior with voluntary yields). |
+| **`user/eevdf_test3.c`** | [cite\_start]**Test 3:** Sleep/Wakeup Fairness Test (Simulating I/O bound behavior). |
 
 ## 🛠️ System Calls
 
 The following system calls were introduced to interact with the scheduler:
 
-1.  **`setweight(int weight)`**: Sets the proportional weight of the current process. [cite\_start]Higher weight = more CPU time[cite: 226].
-2.  [cite\_start]**`setschedtrace(int enable)`**: Enables real-time logging of scheduling events to the console for debugging[cite: 235].
-3.  [cite\_start]**`getpinfo(struct pinfo *info)`**: Retrieves internal scheduler state (runtime, deadline, sched\_count) for the current process[cite: 245].
+1.  **`setweight(int weight)`**: Sets the proportional weight of the current process. [cite\_start]Higher weight = more CPU time.
+2.  **`setschedtrace(int enable)`**: Enables real-time logging of scheduling events to the console for debugging.
+3.  **`getpinfo(struct pinfo *info)`**: Retrieves internal scheduler state (runtime, deadline, sched\_count) for the current process.
 
 ## 🚀 How to Run (Linux)
 
@@ -62,7 +59,14 @@ sudo apt-get install git build-essential gdb-multiarch qemu-system-misc gcc-risc
 
 ### 2\. Build and Launch
 
-Navigate to the source directory and compile the kernel using `make`:
+```bash
+# Git clone reporsitory
+git clone https://github.com/saumadeepsardar/xv6-eevdf.git
+
+# Naviagate to project folder
+cd xv6-eevdf
+```
+Compile the kernel using `make`:
 
 ```bash
 # Clean previous builds
@@ -97,10 +101,10 @@ Verifies that processes waking up from sleep are treated fairly regarding deadli
 $ eevdf_test3
 ```
 
-[cite\_start]To enable verbose scheduling traces manually inside any program, the code uses `setschedtrace(1)`[cite: 281].
+To enable verbose scheduling traces manually inside any program, the code uses `setschedtrace(1)`.
 
 ## 👥 Contributors
 
-  * [cite\_start]**Saumadeep Sardar** (Roll No.: CS23B1049) [cite: 5]
-  * [cite\_start]**Dhage Pratik Bhishmacharya** (Roll No.: CS23B1047) [cite: 6]
-  * [cite\_start]**Nisarg Ranade** (Roll No.: CS23B1090) [cite: 6]
+  * **Saumadeep Sardar** (Roll No.: CS23B1049) 
+  * **Dhage Pratik Bhishmacharya** (Roll No.: CS23B1047) 
+  * **Nisarg Ranade** (Roll No.: CS23B1090) 
